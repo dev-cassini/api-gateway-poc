@@ -2,8 +2,7 @@ routes:
   - name: create-lead
     method: POST
     path: /leads
-    authorization:
-      policy: import-lead
+    gatewayAuthorization:
       requirements:
         - authenticated user
         - scope: leads:import
@@ -11,8 +10,7 @@ routes:
   - name: get-lead
     method: GET
     path: /leads/{leadId}
-    authorization:
-      policy: read-lead
+    gatewayAuthorization:
       requirements:
         - authenticated user
         - role: adviser or customer
@@ -20,9 +18,10 @@ routes:
   - name: assign-lead
     method: POST
     path: /leads/{leadId}/assign
-    authorization:
-      policy: assign-lead
+    gatewayAuthorization:
       requirements:
         - authenticated user
         - role: adviser
+    apiChecks:
+      requirements:
         - staff type: manager (via staff directory lookup)

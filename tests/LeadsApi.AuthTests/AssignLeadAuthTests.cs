@@ -44,11 +44,13 @@ public sealed class AssignLeadAuthTests
     [Test]
     public async Task AssignLead_WithAdviserManager_Returns200()
     {
+        var createdLead = await TestLeadHelper.CreateLeadAndGetResponseAsync(AuthTestContext.RequiredClient);
+
         AuthTestContext.RequiredClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
             "manager-01|adviser|profile:read|manager-01@example.com");
 
-        var response = await AuthTestContext.RequiredClient.PostAsJsonAsync($"/leads/{Guid.NewGuid()}/assign", new AssignLeadRequest
+        var response = await AuthTestContext.RequiredClient.PostAsJsonAsync($"/leads/{createdLead.Id}/assign", new AssignLeadRequest
         {
             AdviserId = "adviser-99"
         });

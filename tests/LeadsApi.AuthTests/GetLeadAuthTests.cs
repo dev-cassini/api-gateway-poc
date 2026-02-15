@@ -36,11 +36,13 @@ public sealed class GetLeadAuthTests
     [Test]
     public async Task GetLead_WithAdviserRole_Returns200()
     {
+        var createdLead = await TestLeadHelper.CreateLeadAndGetResponseAsync(AuthTestContext.RequiredClient);
+
         AuthTestContext.RequiredClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
             "adviser-01|adviser|profile:read|adviser-01@example.com");
 
-        var response = await AuthTestContext.RequiredClient.GetAsync($"/leads/{Guid.NewGuid()}");
+        var response = await AuthTestContext.RequiredClient.GetAsync($"/leads/{createdLead.Id}");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }

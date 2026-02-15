@@ -4,13 +4,15 @@ This is a minimal ASP.NET Core API targeting `net10.0` for the API gateway PoC.
 
 ## Endpoints
 
-- `POST /leads` -> requires scope `leads:import`.
-- `GET /leads/{leadId}` -> requires role `adviser` or `customer`.
-- `POST /leads/{leadId}/assign` -> requires role `adviser` and staff type `manager` (looked up via external API).
+- `POST /leads` -> route is anonymous in the API; gateway is expected to require scope `leads:import`.
+- `GET /leads/{leadId}` -> route is anonymous in the API; gateway is expected to require role `adviser` or `customer`.
+- `POST /leads/{leadId}/assign` -> route is anonymous in the API; gateway is expected to require role `adviser`.
+- `POST /leads/{leadId}/assign` also performs an inline manager check in the API via staff directory lookup.
 
 ## Demo authentication
 
-The project uses a simple bearer token parser for local PoC use:
+The API uses a simple bearer token parser for local PoC use to populate `HttpContext.User`
+after Kong forwards the `Authorization` header:
 
 `Authorization: Bearer <userId>|<comma-separated-roles>[|<comma-separated-scopes>[|<email>]]`
 

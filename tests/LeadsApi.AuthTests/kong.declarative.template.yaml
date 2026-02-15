@@ -2,16 +2,83 @@ _format_version: "3.0"
 services:
   - name: leads-api
     url: http://{{UPSTREAM_HOST}}:{{UPSTREAM_PORT}}
+    plugins:
+      - name: pre-function
+        config:
+          access:
+            - |
+              local function deny(status, message)
+                return kong.response.exit(status, { message = message })
+              end
+
+              local auth = kong.request.get_header("authorization")
+              if not auth then
+                return deny(401, "Missing authorization header")
+              end
+
+              local token = auth:match("^[Bb]earer%s+(.+)$")
+              if not token then
+                return deny(401, "Invalid authorization header")
+              end
+
+              local user_id, roles_csv, scopes_csv, email = token:match("^([^|]+)|([^|]+)|?([^|]*)|?(.*)$")
+              if not user_id or not roles_csv then
+                return deny(401, "Malformed bearer token")
+              end
+
+              local roles = {}
+              for role in string.gmatch(roles_csv, "[^,]+") do
+                local normalized = role:match("^%s*(.-)%s*$")
+                if normalized ~= "" then
+                  roles[string.lower(normalized)] = true
+                end
+              end
+
+              if next(roles) == nil then
+                return deny(401, "Token does not contain roles")
+              end
+
+              local scopes = {}
+              for scope in string.gmatch(scopes_csv or "", "[^,]+") do
+                local normalized = scope:match("^%s*(.-)%s*$")
+                if normalized ~= "" then
+                  scopes[normalized] = true
+                end
+              end
+
+              local method = kong.request.get_method()
+              local path = kong.request.get_path()
+
+              if method == "POST" and path == "/leads" then
+                if not scopes["leads:import"] then
+                  return deny(403, "Missing required scope: leads:import")
+                end
+                return
+              end
+
+              if method == "GET" and string.match(path, "^/leads/[0-9a-fA-F%-]+$") then
+                if not roles["adviser"] and not roles["customer"] then
+                  return deny(403, "Missing required role")
+                end
+                return
+              end
+
+              if method == "POST" and string.match(path, "^/leads/[0-9a-fA-F%-]+/assign$") then
+                if not roles["adviser"] then
+                  return deny(403, "Missing required role: adviser")
+                end
+                return
+              end
     routes:
       - name: create-lead
         methods: ["POST"]
-        paths: ["/leads"]
+        paths: ["~/leads$"]
         strip_path: false
       - name: get-lead
         methods: ["GET"]
-        paths: ["/leads"]
+        paths: ["~/leads/[0-9a-fA-F-]+$"]
         strip_path: false
       - name: assign-lead
         methods: ["POST"]
-        paths: ["/leads"]
+        paths: ["~/leads/[0-9a-fA-F-]+/assign$"]
         strip_path: false

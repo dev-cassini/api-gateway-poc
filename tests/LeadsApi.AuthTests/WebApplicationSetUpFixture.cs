@@ -137,7 +137,7 @@ public sealed class WebApplicationSetUpFixture
             try
             {
                 using var response = await probeClient.GetAsync($"/leads/{Guid.NewGuid()}");
-                if (response.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.OK)
+                if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.OK)
                 {
                     return;
                 }

@@ -1,80 +1,30 @@
 using System.Security.Claims;
-using LeadsApi.Auth;
 using LeadsApi.Contracts;
 using LeadsApi.Services;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
-var disableApiAuth = builder.Configuration.GetValue<bool>("GatewayAuthTesting:DisableApiAuth");
-
-if (!disableApiAuth)
-{
-    builder.Services
-        .AddAuthentication(options =>
-        {
-            options.DefaultAuthenticateScheme = DemoBearerAuthenticationHandler.SchemeName;
-            options.DefaultChallengeScheme = DemoBearerAuthenticationHandler.SchemeName;
-        })
-        .AddScheme<AuthenticationSchemeOptions, DemoBearerAuthenticationHandler>(
-            DemoBearerAuthenticationHandler.SchemeName,
-            _ =>
-            {
-            });
-
-    builder.Services.AddAuthorization(options =>
-    {
-        options.AddPolicy(AuthPolicies.ImportLead, policy =>
-        {
-            policy.RequireAuthenticatedUser();
-            policy.RequireClaim("scope", "leads:import");
-        });
-
-        options.AddPolicy(AuthPolicies.ReadLead, policy =>
-        {
-            policy.RequireAuthenticatedUser();
-            policy.RequireRole("adviser", "customer");
-        });
-
-        options.AddPolicy(AuthPolicies.AssignLead, policy =>
-        {
-            policy.RequireAuthenticatedUser();
-            policy.RequireRole("adviser");
-            policy.AddRequirements(new MustBeManagerRequirement());
-        });
-    });
-
-    builder.Services.AddSingleton<IAuthorizationHandler, MustBeManagerHandler>();
-
-    builder.Services.AddHttpClient<IStaffTypeClient, StaffTypeClient>((sp, client) =>
-    {
-        var configuration = sp.GetRequiredService<IConfiguration>();
-        var baseUrl = configuration["StaffDirectory:BaseUrl"];
-
-        if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
-        {
-            client.BaseAddress = uri;
-        }
-
-        client.Timeout = TimeSpan.FromSeconds(5);
-    });
-}
 
 builder.Services.AddSingleton<ILeadRepository, InMemoryLeadRepository>();
+builder.Services.AddHttpClient<IStaffTypeClient, StaffTypeClient>((sp, client) =>
+{
+    var configuration = sp.GetRequiredService<IConfiguration>();
+    var baseUrl = configuration["StaffDirectory:BaseUrl"];
+
+    if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+    {
+        client.BaseAddress = uri;
+    }
+
+    client.Timeout = TimeSpan.FromSeconds(5);
+});
 
 var app = builder.Build();
 
-if (!disableApiAuth)
-{
-    app.UseAuthentication();
-    app.UseAuthorization();
-}
-
-app.UseAuthTestShortCircuit(builder.Configuration);
+app.UseUserClaimsFromBearerToken();
 
 var leads = app.MapGroup("/leads");
 
-var createLeadEndpoint = leads.MapPost(
+leads.MapPost(
         "",
         (CreateLeadRequest request, HttpContext httpContext, ILeadRepository repository) =>
         {
@@ -98,19 +48,21 @@ var createLeadEndpoint = leads.MapPost(
                             ?? httpContext.User.FindFirstValue("email");
             var lead = repository.Create(request, createdBy);
             return Results.Created($"/leads/{lead.Id}", lead);
-        });
+        })
+    .AllowAnonymous();
 
-var getLeadEndpoint = leads.MapGet(
+leads.MapGet(
         "/{leadId:guid}",
         (Guid leadId, ILeadRepository repository) =>
         {
             var lead = repository.GetById(leadId);
             return lead is null ? Results.NotFound() : Results.Ok(lead);
-        });
+        })
+    .AllowAnonymous();
 
-var assignLeadEndpoint = leads.MapPost(
+leads.MapPost(
         "/{leadId:guid}/assign",
-        (Guid leadId, AssignLeadRequest request, ILeadRepository repository) =>
+        async Task<IResult> (Guid leadId, AssignLeadRequest request, HttpContext httpContext, IStaffTypeClient staffTypeClient, ILeadRepository repository) =>
         {
             var errors = new Dictionary<string, string[]>();
             if (string.IsNullOrWhiteSpace(request.AdviserId))
@@ -123,22 +75,23 @@ var assignLeadEndpoint = leads.MapPost(
                 return Results.ValidationProblem(errors);
             }
 
+            var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier)
+                         ?? httpContext.User.FindFirstValue("sub");
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
+            var staffType = await staffTypeClient.GetStaffTypeAsync(userId, httpContext.RequestAborted);
+            if (!string.Equals(staffType, "manager", StringComparison.OrdinalIgnoreCase))
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
+
             var updatedLead = repository.Assign(leadId, request.AdviserId);
             return updatedLead is null ? Results.NotFound() : Results.Ok(updatedLead);
-        });
-
-if (disableApiAuth)
-{
-    createLeadEndpoint.AllowAnonymous();
-    getLeadEndpoint.AllowAnonymous();
-    assignLeadEndpoint.AllowAnonymous();
-}
-else
-{
-    createLeadEndpoint.RequireAuthorization(AuthPolicies.ImportLead);
-    getLeadEndpoint.RequireAuthorization(AuthPolicies.ReadLead);
-    assignLeadEndpoint.RequireAuthorization(AuthPolicies.AssignLead);
-}
+        })
+    .AllowAnonymous();
 
 app.Run();
 
@@ -146,31 +99,78 @@ public partial class Program
 {
 }
 
-static partial class ProgramAuthTestExtensions
+static partial class ProgramClaimsPrincipalExtensions
 {
-    public static void UseAuthTestShortCircuit(this WebApplication app, IConfiguration configuration)
+    public static void UseUserClaimsFromBearerToken(this WebApplication app)
     {
-        var enabled = configuration.GetValue<bool>("AuthTesting:ShortCircuitEnabled");
-        if (!enabled)
+        app.Use((context, next) =>
         {
-            return;
-        }
-        var createdPaths = configuration
-            .GetSection("AuthTesting:CreatedPaths")
-            .Get<string[]>() ?? [];
-        var createdPathSet = new HashSet<string>(createdPaths, StringComparer.OrdinalIgnoreCase);
-
-        app.Use(async (context, next) =>
-        {
-            if (context.GetEndpoint() is not null && !context.Response.HasStarted)
+            if (TryCreatePrincipalFromBearerToken(context.Request.Headers.Authorization, out var principal))
             {
-                var isCreated = HttpMethods.IsPost(context.Request.Method) &&
-                                createdPathSet.Contains(context.Request.Path.Value ?? string.Empty);
-                context.Response.StatusCode = isCreated ? StatusCodes.Status201Created : StatusCodes.Status200OK;
-                return;
+                context.User = principal;
             }
 
-            await next();
+            return next();
         });
+    }
+
+    private static bool TryCreatePrincipalFromBearerToken(string? authorizationHeader, out ClaimsPrincipal principal)
+    {
+        principal = new ClaimsPrincipal(new ClaimsIdentity());
+
+        if (string.IsNullOrWhiteSpace(authorizationHeader) ||
+            !authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var token = authorizationHeader["Bearer ".Length..].Trim();
+        var tokenParts = token.Split('|', 4, StringSplitOptions.TrimEntries);
+        if (tokenParts.Length < 2 || string.IsNullOrWhiteSpace(tokenParts[0]))
+        {
+            return false;
+        }
+
+        var userId = tokenParts[0];
+        var roles = tokenParts[1]
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+        if (roles.Length == 0)
+        {
+            return false;
+        }
+
+        var scopes = tokenParts.Length >= 3
+            ? tokenParts[2]
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray()
+            : [];
+
+        var email = tokenParts.Length == 4 && !string.IsNullOrWhiteSpace(tokenParts[3])
+            ? tokenParts[3].Trim()
+            : null;
+
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, userId),
+            new(ClaimTypes.Name, userId),
+            new("sub", userId)
+        };
+
+        claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
+        claims.AddRange(scopes.Select(scope => new Claim("scope", scope)));
+        claims.AddRange(scopes.Select(scope => new Claim("scp", scope)));
+
+        if (email is not null)
+        {
+            claims.Add(new Claim(ClaimTypes.Email, email));
+            claims.Add(new Claim("email", email));
+        }
+
+        var identity = new ClaimsIdentity(claims, "KongForwardedBearer");
+        principal = new ClaimsPrincipal(identity);
+        return true;
     }
 }

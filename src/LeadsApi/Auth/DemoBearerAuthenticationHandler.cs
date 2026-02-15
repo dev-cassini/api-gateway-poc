@@ -31,12 +31,12 @@ public sealed class DemoBearerAuthenticationHandler : AuthenticationHandler<Auth
         }
 
         var token = header["Bearer ".Length..].Trim();
-        var tokenParts = token.Split('|', 2, StringSplitOptions.TrimEntries);
+        var tokenParts = token.Split('|', 3, StringSplitOptions.TrimEntries);
 
-        if (tokenParts.Length != 2 || string.IsNullOrWhiteSpace(tokenParts[0]))
+        if (tokenParts.Length < 2 || string.IsNullOrWhiteSpace(tokenParts[0]))
         {
             return Task.FromResult(
-                AuthenticateResult.Fail("Invalid token format. Expected <userId>|<role1,role2>."));
+                AuthenticateResult.Fail("Invalid token format. Expected <userId>|<role1,role2>[|<scope1,scope2>]."));
         }
 
         var userId = tokenParts[0];
@@ -50,6 +50,13 @@ public sealed class DemoBearerAuthenticationHandler : AuthenticationHandler<Auth
             return Task.FromResult(AuthenticateResult.Fail("At least one role is required in the token."));
         }
 
+        var scopes = tokenParts.Length == 3
+            ? tokenParts[2]
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray()
+            : [];
+
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, userId),
@@ -58,6 +65,8 @@ public sealed class DemoBearerAuthenticationHandler : AuthenticationHandler<Auth
         };
 
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
+        claims.AddRange(scopes.Select(scope => new Claim("scope", scope)));
+        claims.AddRange(scopes.Select(scope => new Claim("scp", scope)));
 
         var identity = new ClaimsIdentity(claims, SchemeName);
         var principal = new ClaimsPrincipal(identity);

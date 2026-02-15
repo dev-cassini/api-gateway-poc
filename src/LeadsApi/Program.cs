@@ -20,6 +20,12 @@ builder.Services
 
 builder.Services.AddAuthorization(options =>
 {
+    options.AddPolicy(AuthPolicies.ImportLead, policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireClaim("scope", "leads:import");
+    });
+
     options.AddPolicy(AuthPolicies.ReadLead, policy =>
     {
         policy.RequireAuthenticatedUser();
@@ -80,7 +86,7 @@ leads.MapPost(
             var lead = repository.Create(request);
             return Results.Created($"/leads/{lead.Id}", lead);
         })
-    .AllowAnonymous();
+    .RequireAuthorization(AuthPolicies.ImportLead);
 
 leads.MapGet(
         "/{leadId:guid}",

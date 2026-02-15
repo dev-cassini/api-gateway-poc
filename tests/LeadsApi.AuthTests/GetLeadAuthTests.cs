@@ -7,13 +7,16 @@ namespace LeadsApi.AuthTests;
 [TestFixture]
 public sealed class GetLeadAuthTests
 {
+    [SetUp]
+    public void SetUp()
+    {
+        AuthTestContext.RequiredClient.DefaultRequestHeaders.Authorization = null;
+    }
+
     [Test]
     public async Task GetLead_WithoutToken_Returns401()
     {
-        await using var factory = new AuthApiFactory();
-        using var client = factory.CreateClient();
-
-        var response = await client.GetAsync($"/leads/{Guid.NewGuid()}");
+        var response = await AuthTestContext.RequiredClient.GetAsync($"/leads/{Guid.NewGuid()}");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Unauthorized));
     }
@@ -21,13 +24,11 @@ public sealed class GetLeadAuthTests
     [Test]
     public async Task GetLead_WithWrongRole_Returns403()
     {
-        await using var factory = new AuthApiFactory();
-        using var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+        AuthTestContext.RequiredClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
             "ops-01|operations|leads:import|ops-01@example.com");
 
-        var response = await client.GetAsync($"/leads/{Guid.NewGuid()}");
+        var response = await AuthTestContext.RequiredClient.GetAsync($"/leads/{Guid.NewGuid()}");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
     }
@@ -35,13 +36,11 @@ public sealed class GetLeadAuthTests
     [Test]
     public async Task GetLead_WithAdviserRole_Returns200()
     {
-        await using var factory = new AuthApiFactory();
-        using var client = factory.CreateClient();
-        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+        AuthTestContext.RequiredClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
             "adviser-01|adviser|profile:read|adviser-01@example.com");
 
-        var response = await client.GetAsync($"/leads/{Guid.NewGuid()}");
+        var response = await AuthTestContext.RequiredClient.GetAsync($"/leads/{Guid.NewGuid()}");
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
     }

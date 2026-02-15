@@ -9,6 +9,9 @@ namespace LeadsApi.AuthTests;
 [SetUpFixture]
 public sealed class WebApplicationSetUpFixture
 {
+    private const string KongTemplateFileName = "kong.declarative.template.yaml";
+    private const string UpstreamHost = "host.docker.internal";
+
     private AuthApiFactory _apiFactory = null!;
     private IContainer _kongContainer = null!;
     private string _kongConfigFilePath = string.Empty;
@@ -72,26 +75,15 @@ public sealed class WebApplicationSetUpFixture
     private static string CreateKongConfigFile(Uri apiBaseAddress)
     {
         var apiPort = apiBaseAddress.Port;
+        var templatePath = Path.Combine(AppContext.BaseDirectory, KongTemplateFileName);
+        if (!File.Exists(templatePath))
+        {
+            throw new FileNotFoundException($"Could not find Kong template file at '{templatePath}'.");
+        }
 
-        var kongConfig = $"""
-            _format_version: "3.0"
-            services:
-              - name: leads-api
-                url: http://host.docker.internal:{apiPort}
-                routes:
-                  - name: create-lead
-                    methods: ["POST"]
-                    paths: ["/leads"]
-                    strip_path: false
-                  - name: get-lead
-                    methods: ["GET"]
-                    paths: ["/leads"]
-                    strip_path: false
-                  - name: assign-lead
-                    methods: ["POST"]
-                    paths: ["/leads"]
-                    strip_path: false
-            """;
+        var kongConfig = File.ReadAllText(templatePath)
+            .Replace("{{UPSTREAM_HOST}}", UpstreamHost, StringComparison.Ordinal)
+            .Replace("{{UPSTREAM_PORT}}", apiPort.ToString(), StringComparison.Ordinal);
 
         var filePath = Path.Combine("/tmp", $"kong-auth-tests-{Guid.NewGuid():N}.yaml");
         File.WriteAllText(filePath, kongConfig);

@@ -1,0 +1,17 @@
+_format_version: "3.0"
+services:
+  - name: leads-api
+    url: http://{{UPSTREAM_HOST}}:{{UPSTREAM_PORT}}
+    routes:
+      - name: create-lead
+        methods: ["POST"]
+        paths: ["/leads"]
+        strip_path: false
+      - name: get-lead
+        methods: ["GET"]
+        paths: ["/leads"]
+        strip_path: false
+      - name: assign-lead
+        methods: ["POST"]
+        paths: ["/leads"]
+        strip_path: false

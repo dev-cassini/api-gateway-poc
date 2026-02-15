@@ -1,4 +1,3 @@
-using LeadsApi.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server;
 using Microsoft.AspNetCore.Hosting.Server.Features;
@@ -6,7 +5,6 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
 namespace LeadsApi.AuthTests;
@@ -26,14 +24,9 @@ internal sealed class AuthApiFactory : WebApplicationFactory<Program>
             configBuilder.AddInMemoryCollection(
             [
                 new KeyValuePair<string, string?>("AuthTesting:ShortCircuitEnabled", "true"),
-                new KeyValuePair<string, string?>("AuthTesting:CreatedPaths:0", "/leads")
+                new KeyValuePair<string, string?>("AuthTesting:CreatedPaths:0", "/leads"),
+                new KeyValuePair<string, string?>("GatewayAuthTesting:DisableApiAuth", "true")
             ]);
-        });
-
-        builder.ConfigureTestServices(services =>
-        {
-            services.RemoveAll<IStaffTypeClient>();
-            services.AddSingleton<IStaffTypeClient>(new StubStaffTypeClient());
         });
     }
 
@@ -75,18 +68,6 @@ internal sealed class AuthApiFactory : WebApplicationFactory<Program>
         {
             _kestrelHost?.Dispose();
             _kestrelHost = null;
-        }
-    }
-
-    private sealed class StubStaffTypeClient : IStaffTypeClient
-    {
-        public Task<string?> GetStaffTypeAsync(string userId, CancellationToken cancellationToken)
-        {
-            var staffType = userId.Contains("manager", StringComparison.OrdinalIgnoreCase)
-                ? "manager"
-                : "staff";
-
-            return Task.FromResult<string?>(staffType);
         }
     }
 }

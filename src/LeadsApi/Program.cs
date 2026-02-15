@@ -6,66 +6,75 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
+var disableApiAuth = builder.Configuration.GetValue<bool>("GatewayAuthTesting:DisableApiAuth");
 
-builder.Services
-    .AddAuthentication(options =>
-    {
-        options.DefaultAuthenticateScheme = DemoBearerAuthenticationHandler.SchemeName;
-        options.DefaultChallengeScheme = DemoBearerAuthenticationHandler.SchemeName;
-    })
-    .AddScheme<AuthenticationSchemeOptions, DemoBearerAuthenticationHandler>(
-        DemoBearerAuthenticationHandler.SchemeName,
-        _ =>
+if (!disableApiAuth)
+{
+    builder.Services
+        .AddAuthentication(options =>
         {
+            options.DefaultAuthenticateScheme = DemoBearerAuthenticationHandler.SchemeName;
+            options.DefaultChallengeScheme = DemoBearerAuthenticationHandler.SchemeName;
+        })
+        .AddScheme<AuthenticationSchemeOptions, DemoBearerAuthenticationHandler>(
+            DemoBearerAuthenticationHandler.SchemeName,
+            _ =>
+            {
+            });
+
+    builder.Services.AddAuthorization(options =>
+    {
+        options.AddPolicy(AuthPolicies.ImportLead, policy =>
+        {
+            policy.RequireAuthenticatedUser();
+            policy.RequireClaim("scope", "leads:import");
         });
 
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy(AuthPolicies.ImportLead, policy =>
-    {
-        policy.RequireAuthenticatedUser();
-        policy.RequireClaim("scope", "leads:import");
+        options.AddPolicy(AuthPolicies.ReadLead, policy =>
+        {
+            policy.RequireAuthenticatedUser();
+            policy.RequireRole("adviser", "customer");
+        });
+
+        options.AddPolicy(AuthPolicies.AssignLead, policy =>
+        {
+            policy.RequireAuthenticatedUser();
+            policy.RequireRole("adviser");
+            policy.AddRequirements(new MustBeManagerRequirement());
+        });
     });
 
-    options.AddPolicy(AuthPolicies.ReadLead, policy =>
-    {
-        policy.RequireAuthenticatedUser();
-        policy.RequireRole("adviser", "customer");
-    });
+    builder.Services.AddSingleton<IAuthorizationHandler, MustBeManagerHandler>();
 
-    options.AddPolicy(AuthPolicies.AssignLead, policy =>
+    builder.Services.AddHttpClient<IStaffTypeClient, StaffTypeClient>((sp, client) =>
     {
-        policy.RequireAuthenticatedUser();
-        policy.RequireRole("adviser");
-        policy.AddRequirements(new MustBeManagerRequirement());
-    });
-});
+        var configuration = sp.GetRequiredService<IConfiguration>();
+        var baseUrl = configuration["StaffDirectory:BaseUrl"];
 
-builder.Services.AddSingleton<IAuthorizationHandler, MustBeManagerHandler>();
+        if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
+        {
+            client.BaseAddress = uri;
+        }
+
+        client.Timeout = TimeSpan.FromSeconds(5);
+    });
+}
+
 builder.Services.AddSingleton<ILeadRepository, InMemoryLeadRepository>();
-
-builder.Services.AddHttpClient<IStaffTypeClient, StaffTypeClient>((sp, client) =>
-{
-    var configuration = sp.GetRequiredService<IConfiguration>();
-    var baseUrl = configuration["StaffDirectory:BaseUrl"];
-
-    if (Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri))
-    {
-        client.BaseAddress = uri;
-    }
-
-    client.Timeout = TimeSpan.FromSeconds(5);
-});
 
 var app = builder.Build();
 
-app.UseAuthentication();
-app.UseAuthorization();
+if (!disableApiAuth)
+{
+    app.UseAuthentication();
+    app.UseAuthorization();
+}
+
 app.UseAuthTestShortCircuit(builder.Configuration);
 
 var leads = app.MapGroup("/leads");
 
-leads.MapPost(
+var createLeadEndpoint = leads.MapPost(
         "",
         (CreateLeadRequest request, HttpContext httpContext, ILeadRepository repository) =>
         {
@@ -89,19 +98,17 @@ leads.MapPost(
                             ?? httpContext.User.FindFirstValue("email");
             var lead = repository.Create(request, createdBy);
             return Results.Created($"/leads/{lead.Id}", lead);
-        })
-    .RequireAuthorization(AuthPolicies.ImportLead);
+        });
 
-leads.MapGet(
+var getLeadEndpoint = leads.MapGet(
         "/{leadId:guid}",
         (Guid leadId, ILeadRepository repository) =>
         {
             var lead = repository.GetById(leadId);
             return lead is null ? Results.NotFound() : Results.Ok(lead);
-        })
-    .RequireAuthorization(AuthPolicies.ReadLead);
+        });
 
-leads.MapPost(
+var assignLeadEndpoint = leads.MapPost(
         "/{leadId:guid}/assign",
         (Guid leadId, AssignLeadRequest request, ILeadRepository repository) =>
         {
@@ -118,8 +125,20 @@ leads.MapPost(
 
             var updatedLead = repository.Assign(leadId, request.AdviserId);
             return updatedLead is null ? Results.NotFound() : Results.Ok(updatedLead);
-        })
-    .RequireAuthorization(AuthPolicies.AssignLead);
+        });
+
+if (disableApiAuth)
+{
+    createLeadEndpoint.AllowAnonymous();
+    getLeadEndpoint.AllowAnonymous();
+    assignLeadEndpoint.AllowAnonymous();
+}
+else
+{
+    createLeadEndpoint.RequireAuthorization(AuthPolicies.ImportLead);
+    getLeadEndpoint.RequireAuthorization(AuthPolicies.ReadLead);
+    assignLeadEndpoint.RequireAuthorization(AuthPolicies.AssignLead);
+}
 
 app.Run();
 

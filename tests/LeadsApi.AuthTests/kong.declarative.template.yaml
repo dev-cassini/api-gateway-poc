@@ -1,4 +1,12 @@
 _format_version: "3.0"
+plugins:
+  - name: opa
+    config:
+      opa_host: "{{OPA_HOST}}"
+      opa_port: {{OPA_PORT}}
+      opa_path: "/v1/data/leads/authz"
+      include_service_in_opa_input: true
+      include_route_in_opa_input: true
 services:
   - name: leads-api
     url: http://{{UPSTREAM_HOST}}:{{UPSTREAM_PORT}}

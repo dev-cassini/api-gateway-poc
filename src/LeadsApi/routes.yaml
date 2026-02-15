@@ -1,0 +1,28 @@
+routes:
+  - name: create-lead
+    method: POST
+    path: /leads
+    authorization:
+      policy: import-lead
+      requirements:
+        - authenticated user
+        - scope: leads:import
+
+  - name: get-lead
+    method: GET
+    path: /leads/{leadId}
+    authorization:
+      policy: read-lead
+      requirements:
+        - authenticated user
+        - role: adviser or customer
+
+  - name: assign-lead
+    method: POST
+    path: /leads/{leadId}/assign
+    authorization:
+      policy: assign-lead
+      requirements:
+        - authenticated user
+        - role: adviser
+        - staff type: manager (via staff directory lookup)

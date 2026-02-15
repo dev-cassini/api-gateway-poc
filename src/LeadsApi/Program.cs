@@ -121,3 +121,7 @@ leads.MapPost(
     .RequireAuthorization(AuthPolicies.AssignLead);
 
 app.Run();
+
+public partial class Program
+{
+}

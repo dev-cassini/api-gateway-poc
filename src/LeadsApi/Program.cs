@@ -61,6 +61,7 @@ var app = builder.Build();
 
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseAuthTestShortCircuit(builder.Configuration);
 
 var leads = app.MapGroup("/leads");
 
@@ -124,4 +125,78 @@ app.Run();
 
 public partial class Program
 {
+}
+
+static partial class ProgramAuthTestExtensions
+{
+    public static void UseAuthTestShortCircuit(this WebApplication app, IConfiguration configuration)
+    {
+        var enabled = configuration.GetValue<bool>("AuthTesting:ShortCircuitEnabled");
+        if (!enabled)
+        {
+            return;
+        }
+
+        app.Use(async (context, next) =>
+        {
+            if (context.User.Identity?.IsAuthenticated != true)
+            {
+                await next();
+                return;
+            }
+
+            if (HttpMethods.IsPost(context.Request.Method) &&
+                context.Request.Path.Equals("/leads", StringComparison.OrdinalIgnoreCase))
+            {
+                context.Response.StatusCode = StatusCodes.Status201Created;
+                return;
+            }
+
+            if (HttpMethods.IsGet(context.Request.Method) &&
+                TryMatchLeadIdPath(context.Request.Path))
+            {
+                context.Response.StatusCode = StatusCodes.Status200OK;
+                return;
+            }
+
+            if (HttpMethods.IsPost(context.Request.Method) &&
+                TryMatchAssignLeadPath(context.Request.Path))
+            {
+                context.Response.StatusCode = StatusCodes.Status200OK;
+                return;
+            }
+
+            await next();
+        });
+    }
+
+    private static bool TryMatchLeadIdPath(PathString path)
+    {
+        if (!path.StartsWithSegments("/leads", out var remaining))
+        {
+            return false;
+        }
+
+        var segment = remaining.Value?.Trim('/');
+        return !string.IsNullOrWhiteSpace(segment) && Guid.TryParse(segment, out _);
+    }
+
+    private static bool TryMatchAssignLeadPath(PathString path)
+    {
+        if (!path.StartsWithSegments("/leads", out var remaining))
+        {
+            return false;
+        }
+
+        var value = remaining.Value?.Trim('/');
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var parts = value.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length == 2 &&
+               Guid.TryParse(parts[0], out _) &&
+               string.Equals(parts[1], "assign", StringComparison.OrdinalIgnoreCase);
+    }
 }

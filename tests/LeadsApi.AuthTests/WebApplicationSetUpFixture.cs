@@ -1,7 +1,6 @@
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Configurations;
 using DotNet.Testcontainers.Containers;
-using DotNet.Testcontainers.Networks;
 using NUnit.Framework;
 using System.Net;
 
@@ -11,14 +10,9 @@ namespace LeadsApi.AuthTests;
 public sealed class WebApplicationSetUpFixture
 {
     private const string KongTemplateFileName = "kong.declarative.template.yaml";
-    private const string OpaPoliciesDirectoryName = "opa";
-    private const string OpaNetworkAlias = "opa";
-    private const int OpaInternalPort = 8181;
-    private const string KongGatewayImage = "kong/kong-gateway:latest";
+    private const string KongImage = "kong:latest";
 
     private AuthApiFactory _apiFactory = null!;
-    private INetwork _testNetwork = null!;
-    private IContainer _opaContainer = null!;
     private IContainer _kongContainer = null!;
     private string _kongConfigFilePath = string.Empty;
 
@@ -32,30 +26,12 @@ public sealed class WebApplicationSetUpFixture
 
         await WaitForApiReadyAsync(apiBaseAddress);
 
-        _testNetwork = new NetworkBuilder()
-            .WithName($"auth-tests-{Guid.NewGuid():N}")
-            .Build();
-        await _testNetwork.CreateAsync();
-
-        _opaContainer = BuildOpaContainer(_testNetwork);
-        await _opaContainer.StartAsync();
-        await WaitForOpaReadyAsync(_opaContainer.GetMappedPublicPort(OpaInternalPort));
-
-        _kongConfigFilePath = CreateKongConfigFile(apiBaseAddress, OpaNetworkAlias, OpaInternalPort);
-        var kongLicenseData = Environment.GetEnvironmentVariable("KONG_LICENSE_DATA");
-        if (string.IsNullOrWhiteSpace(kongLicenseData))
-        {
-            throw new InvalidOperationException(
-                "KONG_LICENSE_DATA is required for OPA plugin tests because the OPA plugin is enterprise-only.");
-        }
+        _kongConfigFilePath = CreateKongConfigFile(apiBaseAddress);
 
         _kongContainer = new ContainerBuilder()
-            .WithImage(KongGatewayImage)
+            .WithImage(KongImage)
             .WithPortBinding(8000, true)
-            .WithNetwork(_testNetwork)
             .WithEnvironment("KONG_DATABASE", "off")
-            .WithEnvironment("KONG_PLUGINS", "bundled,opa")
-            .WithEnvironment("KONG_LICENSE_DATA", kongLicenseData)
             .WithEnvironment("KONG_DECLARATIVE_CONFIG", "/kong/declarative/kong.yaml")
             .WithEnvironment("KONG_PROXY_ACCESS_LOG", "/dev/stdout")
             .WithEnvironment("KONG_ADMIN_ACCESS_LOG", "/dev/stdout")
@@ -84,19 +60,9 @@ public sealed class WebApplicationSetUpFixture
         AuthTestContext.Client?.Dispose();
         AuthTestContext.Client = null;
 
-        if (_opaContainer is not null)
-        {
-            await _opaContainer.DisposeAsync();
-        }
-
         if (_kongContainer is not null)
         {
             await _kongContainer.DisposeAsync();
-        }
-
-        if (_testNetwork is not null)
-        {
-            await _testNetwork.DeleteAsync();
         }
 
         _apiFactory.Dispose();
@@ -107,25 +73,7 @@ public sealed class WebApplicationSetUpFixture
         }
     }
 
-    private static IContainer BuildOpaContainer(INetwork testNetwork)
-    {
-        var opaPoliciesPath = Path.Combine(AppContext.BaseDirectory, OpaPoliciesDirectoryName);
-        if (!Directory.Exists(opaPoliciesPath))
-        {
-            throw new DirectoryNotFoundException($"Could not find OPA policies directory at '{opaPoliciesPath}'.");
-        }
-
-        return new ContainerBuilder()
-            .WithImage("openpolicyagent/opa:latest")
-            .WithPortBinding(OpaInternalPort, true)
-            .WithNetwork(testNetwork)
-            .WithNetworkAliases(OpaNetworkAlias)
-            .WithCommand("run", "--server", "--addr=0.0.0.0:8181", "/policies")
-            .WithBindMount(opaPoliciesPath, "/policies", AccessMode.ReadOnly)
-            .Build();
-    }
-
-    private static string CreateKongConfigFile(Uri apiBaseAddress, string opaHost, int opaPort)
+    private static string CreateKongConfigFile(Uri apiBaseAddress)
     {
         var apiPort = apiBaseAddress.Port;
         var upstreamHost = Environment.GetEnvironmentVariable("AUTH_TESTS_UPSTREAM_HOST")
@@ -138,9 +86,7 @@ public sealed class WebApplicationSetUpFixture
 
         var kongConfig = File.ReadAllText(templatePath)
             .Replace("{{UPSTREAM_HOST}}", upstreamHost, StringComparison.Ordinal)
-            .Replace("{{UPSTREAM_PORT}}", apiPort.ToString(), StringComparison.Ordinal)
-            .Replace("{{OPA_HOST}}", opaHost, StringComparison.Ordinal)
-            .Replace("{{OPA_PORT}}", opaPort.ToString(), StringComparison.Ordinal);
+            .Replace("{{UPSTREAM_PORT}}", apiPort.ToString(), StringComparison.Ordinal);
 
         var filePath = Path.Combine("/tmp", $"kong-auth-tests-{Guid.NewGuid():N}.yaml");
         File.WriteAllText(filePath, kongConfig);
@@ -175,36 +121,6 @@ public sealed class WebApplicationSetUpFixture
         }
 
         throw new TimeoutException("Timed out waiting for Kong to become ready.");
-    }
-
-    private static async Task WaitForOpaReadyAsync(ushort opaPort)
-    {
-        using var httpClient = new HttpClient
-        {
-            BaseAddress = new Uri($"http://127.0.0.1:{opaPort}"),
-            Timeout = TimeSpan.FromSeconds(2)
-        };
-
-        var deadline = DateTimeOffset.UtcNow.AddSeconds(30);
-        while (DateTimeOffset.UtcNow < deadline)
-        {
-            try
-            {
-                using var response = await httpClient.GetAsync("/v1/data/leads/authz");
-                if (response.IsSuccessStatusCode)
-                {
-                    return;
-                }
-            }
-            catch
-            {
-                // OPA is still booting.
-            }
-
-            await Task.Delay(500);
-        }
-
-        throw new TimeoutException("Timed out waiting for OPA to become ready.");
     }
 
     private static async Task WaitForApiReadyAsync(Uri apiBaseAddress)

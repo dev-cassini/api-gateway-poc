@@ -136,67 +136,22 @@ static partial class ProgramAuthTestExtensions
         {
             return;
         }
+        var createdPaths = configuration
+            .GetSection("AuthTesting:CreatedPaths")
+            .Get<string[]>() ?? [];
+        var createdPathSet = new HashSet<string>(createdPaths, StringComparer.OrdinalIgnoreCase);
 
         app.Use(async (context, next) =>
         {
-            if (context.User.Identity?.IsAuthenticated != true)
+            if (context.GetEndpoint() is not null && !context.Response.HasStarted)
             {
-                await next();
-                return;
-            }
-
-            if (HttpMethods.IsPost(context.Request.Method) &&
-                context.Request.Path.Equals("/leads", StringComparison.OrdinalIgnoreCase))
-            {
-                context.Response.StatusCode = StatusCodes.Status201Created;
-                return;
-            }
-
-            if (HttpMethods.IsGet(context.Request.Method) &&
-                TryMatchLeadIdPath(context.Request.Path))
-            {
-                context.Response.StatusCode = StatusCodes.Status200OK;
-                return;
-            }
-
-            if (HttpMethods.IsPost(context.Request.Method) &&
-                TryMatchAssignLeadPath(context.Request.Path))
-            {
-                context.Response.StatusCode = StatusCodes.Status200OK;
+                var isCreated = HttpMethods.IsPost(context.Request.Method) &&
+                                createdPathSet.Contains(context.Request.Path.Value ?? string.Empty);
+                context.Response.StatusCode = isCreated ? StatusCodes.Status201Created : StatusCodes.Status200OK;
                 return;
             }
 
             await next();
         });
-    }
-
-    private static bool TryMatchLeadIdPath(PathString path)
-    {
-        if (!path.StartsWithSegments("/leads", out var remaining))
-        {
-            return false;
-        }
-
-        var segment = remaining.Value?.Trim('/');
-        return !string.IsNullOrWhiteSpace(segment) && Guid.TryParse(segment, out _);
-    }
-
-    private static bool TryMatchAssignLeadPath(PathString path)
-    {
-        if (!path.StartsWithSegments("/leads", out var remaining))
-        {
-            return false;
-        }
-
-        var value = remaining.Value?.Trim('/');
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return false;
-        }
-
-        var parts = value.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length == 2 &&
-               Guid.TryParse(parts[0], out _) &&
-               string.Equals(parts[1], "assign", StringComparison.OrdinalIgnoreCase);
     }
 }

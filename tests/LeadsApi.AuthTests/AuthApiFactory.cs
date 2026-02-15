@@ -17,7 +17,8 @@ internal sealed class AuthApiFactory(string? staffType = "manager") : WebApplica
         {
             configBuilder.AddInMemoryCollection(
             [
-                new KeyValuePair<string, string?>("AuthTesting:ShortCircuitEnabled", "true")
+                new KeyValuePair<string, string?>("AuthTesting:ShortCircuitEnabled", "true"),
+                new KeyValuePair<string, string?>("AuthTesting:CreatedPaths:0", "/leads")
             ]);
         });
         builder.ConfigureTestServices(services =>

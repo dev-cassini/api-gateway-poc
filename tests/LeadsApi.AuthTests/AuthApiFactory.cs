@@ -17,7 +17,7 @@ internal sealed class AuthApiFactory(string? staffType = "manager") : WebApplica
         builder.ConfigureTestServices(services =>
         {
             services.RemoveAll<ILeadRepository>();
-            services.AddSingleton<ILeadRepository>(new ThrowingLeadRepository());
+            services.AddSingleton<ILeadRepository>(new StubLeadRepository());
 
             services.RemoveAll<IStaffTypeClient>();
             services.AddSingleton<IStaffTypeClient>(new StubStaffTypeClient(staffType));
@@ -32,21 +32,43 @@ internal sealed class AuthApiFactory(string? staffType = "manager") : WebApplica
         }
     }
 
-    private sealed class ThrowingLeadRepository : ILeadRepository
+    private sealed class StubLeadRepository : ILeadRepository
     {
         public Lead Create(CreateLeadRequest request, string? createdBy)
         {
-            throw new InvalidOperationException("Lead repository should not be called in auth-only tests.");
+            return new Lead
+            {
+                Id = Guid.NewGuid(),
+                ContactName = request.ContactName,
+                Email = request.Email,
+                CreatedBy = createdBy,
+                CreatedUtc = DateTimeOffset.UtcNow
+            };
         }
 
         public Lead? GetById(Guid leadId)
         {
-            throw new InvalidOperationException("Lead repository should not be called in auth-only tests.");
+            return new Lead
+            {
+                Id = leadId,
+                ContactName = "Auth Test Lead",
+                Email = "auth-test@example.com",
+                CreatedBy = "auth-test@example.com",
+                CreatedUtc = DateTimeOffset.UtcNow
+            };
         }
 
         public Lead? Assign(Guid leadId, string adviserId)
         {
-            throw new InvalidOperationException("Lead repository should not be called in auth-only tests.");
+            return new Lead
+            {
+                Id = leadId,
+                ContactName = "Auth Test Lead",
+                Email = "auth-test@example.com",
+                CreatedBy = "auth-test@example.com",
+                CreatedUtc = DateTimeOffset.UtcNow,
+                AssignedAdviserId = adviserId
+            };
         }
     }
 }

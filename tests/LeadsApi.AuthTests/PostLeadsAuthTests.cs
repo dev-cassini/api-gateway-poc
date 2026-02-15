@@ -41,4 +41,22 @@ public sealed class PostLeadsAuthTests
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
     }
+
+    [Test]
+    public async Task PostLeads_WithRequiredScope_Returns201()
+    {
+        await using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            "adviser-01|adviser|leads:import|adviser-01@example.com");
+
+        var response = await client.PostAsJsonAsync("/leads", new CreateLeadRequest
+        {
+            ContactName = "Jane Doe",
+            Email = "jane@example.com"
+        });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
+    }
 }

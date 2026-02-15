@@ -39,4 +39,21 @@ public sealed class AssignLeadAuthTests
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
     }
+
+    [Test]
+    public async Task AssignLead_WithAdviserManager_Returns200()
+    {
+        await using var factory = new AuthApiFactory("manager");
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            "adviser-01|adviser|profile:read|adviser-01@example.com");
+
+        var response = await client.PostAsJsonAsync($"/leads/{Guid.NewGuid()}/assign", new AssignLeadRequest
+        {
+            AdviserId = "adviser-99"
+        });
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
 }

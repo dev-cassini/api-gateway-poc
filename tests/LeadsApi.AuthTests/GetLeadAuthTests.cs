@@ -31,4 +31,18 @@ public sealed class GetLeadAuthTests
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Forbidden));
     }
+
+    [Test]
+    public async Task GetLead_WithAdviserRole_Returns200()
+    {
+        await using var factory = new AuthApiFactory();
+        using var client = factory.CreateClient();
+        client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            "adviser-01|adviser|profile:read|adviser-01@example.com");
+
+        var response = await client.GetAsync($"/leads/{Guid.NewGuid()}");
+
+        Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.OK));
+    }
 }

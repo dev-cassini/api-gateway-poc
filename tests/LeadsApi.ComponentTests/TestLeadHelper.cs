@@ -1,8 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text.Json;
 using LeadsApi.Contracts;
+using LeadsApi.Models;
 using NUnit.Framework;
 
 namespace LeadsApi.ComponentTests;
@@ -10,6 +10,12 @@ namespace LeadsApi.ComponentTests;
 internal static class TestLeadHelper
 {
     public static async Task<Guid> CreateLeadAsync(HttpClient client)
+    {
+        var createdLead = await CreateLeadAndGetResponseAsync(client);
+        return createdLead.Id;
+    }
+
+    public static async Task<Lead> CreateLeadAndGetResponseAsync(HttpClient client)
     {
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
@@ -23,7 +29,9 @@ internal static class TestLeadHelper
 
         Assert.That(response.StatusCode, Is.EqualTo(HttpStatusCode.Created));
 
-        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-        return document.RootElement.GetProperty("id").GetGuid();
+        var payload = await response.Content.ReadFromJsonAsync<Lead>();
+        Assert.That(payload, Is.Not.Null);
+
+        return payload!;
     }
 }

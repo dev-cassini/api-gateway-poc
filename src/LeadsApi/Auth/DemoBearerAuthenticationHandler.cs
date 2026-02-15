@@ -31,12 +31,13 @@ public sealed class DemoBearerAuthenticationHandler : AuthenticationHandler<Auth
         }
 
         var token = header["Bearer ".Length..].Trim();
-        var tokenParts = token.Split('|', 3, StringSplitOptions.TrimEntries);
+        var tokenParts = token.Split('|', 4, StringSplitOptions.TrimEntries);
 
         if (tokenParts.Length < 2 || string.IsNullOrWhiteSpace(tokenParts[0]))
         {
             return Task.FromResult(
-                AuthenticateResult.Fail("Invalid token format. Expected <userId>|<role1,role2>[|<scope1,scope2>]."));
+                AuthenticateResult.Fail(
+                    "Invalid token format. Expected <userId>|<role1,role2>[|<scope1,scope2>[|<email>]]."));
         }
 
         var userId = tokenParts[0];
@@ -56,6 +57,9 @@ public sealed class DemoBearerAuthenticationHandler : AuthenticationHandler<Auth
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .ToArray()
             : [];
+        var email = tokenParts.Length == 4 && !string.IsNullOrWhiteSpace(tokenParts[3])
+            ? tokenParts[3].Trim()
+            : null;
 
         var claims = new List<Claim>
         {
@@ -67,6 +71,11 @@ public sealed class DemoBearerAuthenticationHandler : AuthenticationHandler<Auth
         claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
         claims.AddRange(scopes.Select(scope => new Claim("scope", scope)));
         claims.AddRange(scopes.Select(scope => new Claim("scp", scope)));
+        if (email is not null)
+        {
+            claims.Add(new Claim(ClaimTypes.Email, email));
+            claims.Add(new Claim("email", email));
+        }
 
         var identity = new ClaimsIdentity(claims, SchemeName);
         var principal = new ClaimsPrincipal(identity);

@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using LeadsApi.Auth;
 using LeadsApi.Contracts;
 using LeadsApi.Services;
@@ -65,7 +66,7 @@ var leads = app.MapGroup("/leads");
 
 leads.MapPost(
         "",
-        (CreateLeadRequest request, ILeadRepository repository) =>
+        (CreateLeadRequest request, HttpContext httpContext, ILeadRepository repository) =>
         {
             var errors = new Dictionary<string, string[]>();
             if (string.IsNullOrWhiteSpace(request.ContactName))
@@ -83,7 +84,9 @@ leads.MapPost(
                 return Results.ValidationProblem(errors);
             }
 
-            var lead = repository.Create(request);
+            var createdBy = httpContext.User.FindFirstValue(ClaimTypes.Email)
+                            ?? httpContext.User.FindFirstValue("email");
+            var lead = repository.Create(request, createdBy);
             return Results.Created($"/leads/{lead.Id}", lead);
         })
     .RequireAuthorization(AuthPolicies.ImportLead);

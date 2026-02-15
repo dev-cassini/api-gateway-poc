@@ -8,13 +8,14 @@ public sealed class InMemoryLeadRepository : ILeadRepository
 {
     private readonly ConcurrentDictionary<Guid, Lead> _leads = new();
 
-    public Lead Create(CreateLeadRequest request)
+    public Lead Create(CreateLeadRequest request, string? createdBy)
     {
         var lead = new Lead
         {
             Id = Guid.NewGuid(),
             ContactName = request.ContactName.Trim(),
             Email = request.Email.Trim(),
+            CreatedBy = string.IsNullOrWhiteSpace(createdBy) ? null : createdBy.Trim(),
             CreatedUtc = DateTimeOffset.UtcNow
         };
 

@@ -51,7 +51,7 @@ public sealed class DemoBearerAuthenticationHandler : AuthenticationHandler<Auth
             return Task.FromResult(AuthenticateResult.Fail("At least one role is required in the token."));
         }
 
-        var scopes = tokenParts.Length == 3
+        var scopes = tokenParts.Length >= 3
             ? tokenParts[2]
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .Distinct(StringComparer.OrdinalIgnoreCase)

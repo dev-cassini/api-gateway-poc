@@ -29,9 +29,14 @@ public sealed class AssignLeadAuthTests
     [Test]
     public async Task AssignLead_WhenStaffTypeIsNotManager_Returns403()
     {
+        var token = TestJwtTokenFactory.CreateToken(
+            userId: "adviser-01",
+            roles: ["adviser"],
+            scopes: ["profile:read"],
+            email: "adviser-01@example.com");
         AuthTestContext.RequiredClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
-            "adviser-01|adviser|profile:read|adviser-01@example.com");
+            token);
 
         var response = await AuthTestContext.RequiredClient.PostAsJsonAsync($"/leads/{Guid.NewGuid()}/assign", new AssignLeadRequest
         {
@@ -46,9 +51,14 @@ public sealed class AssignLeadAuthTests
     {
         var createdLead = await TestLeadHelper.CreateLeadAndGetResponseAsync(AuthTestContext.RequiredClient);
 
+        var token = TestJwtTokenFactory.CreateToken(
+            userId: "manager-01",
+            roles: ["adviser"],
+            scopes: ["profile:read"],
+            email: "manager-01@example.com");
         AuthTestContext.RequiredClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
-            "manager-01|adviser|profile:read|manager-01@example.com");
+            token);
 
         var response = await AuthTestContext.RequiredClient.PostAsJsonAsync($"/leads/{createdLead.Id}/assign", new AssignLeadRequest
         {

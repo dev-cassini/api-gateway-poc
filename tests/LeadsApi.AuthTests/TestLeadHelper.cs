@@ -11,9 +11,14 @@ internal static class TestLeadHelper
 {
     public static async Task<Lead> CreateLeadAndGetResponseAsync(HttpClient client)
     {
+        var token = TestJwtTokenFactory.CreateToken(
+            userId: "creator-01",
+            roles: ["adviser"],
+            scopes: ["leads:import"],
+            email: "creator-01@example.com");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
-            "creator-01|adviser|leads:import|creator-01@example.com");
+            token);
 
         var response = await client.PostAsJsonAsync("/leads", new CreateLeadRequest
         {

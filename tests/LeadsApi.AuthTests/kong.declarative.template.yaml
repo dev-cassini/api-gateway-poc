@@ -11,6 +11,24 @@ services:
                 return kong.response.exit(status, { message = message })
               end
 
+              local function base64_url_decode(input)
+                if not input then
+                  return nil
+                end
+
+                local normalized = input:gsub("-", "+"):gsub("_", "/")
+                local padding = #normalized % 4
+                if padding == 2 then
+                  normalized = normalized .. "=="
+                elseif padding == 3 then
+                  normalized = normalized .. "="
+                elseif padding == 1 then
+                  return nil
+                end
+
+                return ngx.decode_base64(normalized)
+              end
+
               local auth = kong.request.get_header("authorization")
               if not auth then
                 return deny(401, "Missing authorization header")
@@ -21,16 +39,26 @@ services:
                 return deny(401, "Invalid authorization header")
               end
 
-              local user_id, roles_csv, scopes_csv, email = token:match("^([^|]+)|([^|]+)|?([^|]*)|?(.*)$")
-              if not user_id or not roles_csv then
-                return deny(401, "Malformed bearer token")
+              local header_b64, payload_b64 = token:match("^([^.]+)%.([^.]+)%.([^.]+)$")
+              if not header_b64 or not payload_b64 then
+                return deny(401, "Malformed JWT")
+              end
+
+              local payload_json = base64_url_decode(payload_b64)
+              if not payload_json then
+                return deny(401, "Invalid JWT payload encoding")
               end
 
               local roles = {}
-              for role in string.gmatch(roles_csv, "[^,]+") do
-                local normalized = role:match("^%s*(.-)%s*$")
-                if normalized ~= "" then
-                  roles[string.lower(normalized)] = true
+              local role_single = payload_json:match('"role"%s*:%s*"([^"]+)"')
+              if role_single then
+                roles[string.lower(role_single)] = true
+              end
+
+              local role_array = payload_json:match('"role"%s*:%s*%[([^%]]+)%]')
+              if role_array then
+                for role in string.gmatch(role_array, '"([^"]+)"') do
+                  roles[string.lower(role)] = true
                 end
               end
 
@@ -39,10 +67,17 @@ services:
               end
 
               local scopes = {}
-              for scope in string.gmatch(scopes_csv or "", "[^,]+") do
-                local normalized = scope:match("^%s*(.-)%s*$")
-                if normalized ~= "" then
-                  scopes[normalized] = true
+              local scope_single = payload_json:match('"scope"%s*:%s*"([^"]+)"')
+              if scope_single then
+                for scope in string.gmatch(scope_single, "[^,%s]+") do
+                  scopes[scope] = true
+                end
+              end
+
+              local scope_array = payload_json:match('"scp"%s*:%s*%[([^%]]+)%]')
+              if scope_array then
+                for scope in string.gmatch(scope_array, '"([^"]+)"') do
+                  scopes[scope] = true
                 end
               end
 

@@ -1,8 +1,31 @@
 using System.Security.Claims;
+using System.Text;
 using LeadsApi.Contracts;
 using LeadsApi.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var jwtSigningKey = builder.Configuration["Jwt:SigningKey"] ?? "local-dev-jwt-signing-key-for-poc-2026";
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.MapInboundClaims = false;
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSigningKey)),
+            NameClaimType = "sub",
+            RoleClaimType = "role",
+            ClockSkew = TimeSpan.Zero
+        };
+    });
 
 builder.Services.AddSingleton<ILeadRepository, InMemoryLeadRepository>();
 builder.Services.AddHttpClient<IStaffTypeClient, StaffTypeClient>((sp, client) =>
@@ -20,7 +43,7 @@ builder.Services.AddHttpClient<IStaffTypeClient, StaffTypeClient>((sp, client) =
 
 var app = builder.Build();
 
-app.UseUserClaimsFromBearerToken();
+app.UseAuthentication();
 
 var leads = app.MapGroup("/leads");
 
@@ -97,80 +120,4 @@ app.Run();
 
 public partial class Program
 {
-}
-
-static partial class ProgramClaimsPrincipalExtensions
-{
-    public static void UseUserClaimsFromBearerToken(this WebApplication app)
-    {
-        app.Use((context, next) =>
-        {
-            if (TryCreatePrincipalFromBearerToken(context.Request.Headers.Authorization, out var principal))
-            {
-                context.User = principal;
-            }
-
-            return next();
-        });
-    }
-
-    private static bool TryCreatePrincipalFromBearerToken(string? authorizationHeader, out ClaimsPrincipal principal)
-    {
-        principal = new ClaimsPrincipal(new ClaimsIdentity());
-
-        if (string.IsNullOrWhiteSpace(authorizationHeader) ||
-            !authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-        {
-            return false;
-        }
-
-        var token = authorizationHeader["Bearer ".Length..].Trim();
-        var tokenParts = token.Split('|', 4, StringSplitOptions.TrimEntries);
-        if (tokenParts.Length < 2 || string.IsNullOrWhiteSpace(tokenParts[0]))
-        {
-            return false;
-        }
-
-        var userId = tokenParts[0];
-        var roles = tokenParts[1]
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
-        if (roles.Length == 0)
-        {
-            return false;
-        }
-
-        var scopes = tokenParts.Length >= 3
-            ? tokenParts[2]
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToArray()
-            : [];
-
-        var email = tokenParts.Length == 4 && !string.IsNullOrWhiteSpace(tokenParts[3])
-            ? tokenParts[3].Trim()
-            : null;
-
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.NameIdentifier, userId),
-            new(ClaimTypes.Name, userId),
-            new("sub", userId)
-        };
-
-        claims.AddRange(roles.Select(role => new Claim(ClaimTypes.Role, role)));
-        claims.AddRange(scopes.Select(scope => new Claim("scope", scope)));
-        claims.AddRange(scopes.Select(scope => new Claim("scp", scope)));
-
-        if (email is not null)
-        {
-            claims.Add(new Claim(ClaimTypes.Email, email));
-            claims.Add(new Claim("email", email));
-        }
-
-        var identity = new ClaimsIdentity(claims, "KongForwardedBearer");
-        principal = new ClaimsPrincipal(identity);
-        return true;
-    }
 }

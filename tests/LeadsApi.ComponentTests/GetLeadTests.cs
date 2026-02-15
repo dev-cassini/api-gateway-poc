@@ -16,9 +16,14 @@ public sealed class GetLeadTests
         using var client = factory.CreateClient();
         var createdLead = await TestLeadHelper.CreateLeadAndGetResponseAsync(client);
 
+        var token = TestJwtTokenFactory.CreateToken(
+            userId: "customer-17",
+            roles: ["customer"],
+            scopes: ["profile:read"],
+            email: "customer-17@example.com");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
-            "customer-17|customer|profile:read|customer-17@example.com");
+            token);
 
         var response = await client.GetAsync($"/leads/{createdLead.Id}");
         var payload = await response.Content.ReadFromJsonAsync<Lead>();

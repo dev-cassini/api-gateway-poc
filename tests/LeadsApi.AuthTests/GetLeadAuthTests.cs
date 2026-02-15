@@ -24,9 +24,14 @@ public sealed class GetLeadAuthTests
     [Test]
     public async Task GetLead_WithWrongRole_Returns403()
     {
+        var token = TestJwtTokenFactory.CreateToken(
+            userId: "ops-01",
+            roles: ["operations"],
+            scopes: ["leads:import"],
+            email: "ops-01@example.com");
         AuthTestContext.RequiredClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
-            "ops-01|operations|leads:import|ops-01@example.com");
+            token);
 
         var response = await AuthTestContext.RequiredClient.GetAsync($"/leads/{Guid.NewGuid()}");
 
@@ -38,9 +43,14 @@ public sealed class GetLeadAuthTests
     {
         var createdLead = await TestLeadHelper.CreateLeadAndGetResponseAsync(AuthTestContext.RequiredClient);
 
+        var token = TestJwtTokenFactory.CreateToken(
+            userId: "adviser-01",
+            roles: ["adviser"],
+            scopes: ["profile:read"],
+            email: "adviser-01@example.com");
         AuthTestContext.RequiredClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
-            "adviser-01|adviser|profile:read|adviser-01@example.com");
+            token);
 
         var response = await AuthTestContext.RequiredClient.GetAsync($"/leads/{createdLead.Id}");
 

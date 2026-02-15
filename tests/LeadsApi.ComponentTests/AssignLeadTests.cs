@@ -17,9 +17,14 @@ public sealed class AssignLeadTests
         using var client = factory.CreateClient();
         var createdLead = await TestLeadHelper.CreateLeadAndGetResponseAsync(client);
 
+        var token = TestJwtTokenFactory.CreateToken(
+            userId: "adviser-01",
+            roles: ["adviser"],
+            scopes: ["profile:read"],
+            email: "adviser-01@example.com");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
-            "adviser-01|adviser|profile:read|adviser-01@example.com");
+            token);
 
         var response = await client.PostAsJsonAsync($"/leads/{createdLead.Id}/assign", new AssignLeadRequest
         {

@@ -15,9 +15,14 @@ public sealed class PostLeadsTests
     {
         await using var factory = new ApiFactory();
         using var client = factory.CreateClient();
+        var token = TestJwtTokenFactory.CreateToken(
+            userId: "adviser-01",
+            roles: ["adviser"],
+            scopes: ["leads:import"],
+            email: "adviser-01@example.com");
         client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer",
-            "adviser-01|adviser|leads:import|adviser-01@example.com");
+            token);
 
         var response = await client.PostAsJsonAsync("/leads", new CreateLeadRequest
         {

@@ -1,6 +1,5 @@
-using System.Security.Claims;
 using System.Text;
-using LeadsApi.Contracts;
+using LeadsApi.Endpoints;
 using LeadsApi.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -44,77 +43,7 @@ builder.Services.AddHttpClient<IStaffTypeClient, StaffTypeClient>((sp, client) =
 var app = builder.Build();
 
 app.UseAuthentication();
-
-var leads = app.MapGroup("/leads");
-
-leads.MapPost(
-        "",
-        (CreateLeadRequest request, HttpContext httpContext, ILeadRepository repository) =>
-        {
-            var errors = new Dictionary<string, string[]>();
-            if (string.IsNullOrWhiteSpace(request.ContactName))
-            {
-                errors[nameof(request.ContactName)] = ["ContactName is required."];
-            }
-
-            if (string.IsNullOrWhiteSpace(request.Email))
-            {
-                errors[nameof(request.Email)] = ["Email is required."];
-            }
-
-            if (errors.Count > 0)
-            {
-                return Results.ValidationProblem(errors);
-            }
-
-            var createdBy = httpContext.User.FindFirstValue(ClaimTypes.Email)
-                            ?? httpContext.User.FindFirstValue("email");
-            var lead = repository.Create(request, createdBy);
-            return Results.Created($"/leads/{lead.Id}", lead);
-        })
-    .AllowAnonymous();
-
-leads.MapGet(
-        "/{leadId:guid}",
-        (Guid leadId, ILeadRepository repository) =>
-        {
-            var lead = repository.GetById(leadId);
-            return lead is null ? Results.NotFound() : Results.Ok(lead);
-        })
-    .AllowAnonymous();
-
-leads.MapPost(
-        "/{leadId:guid}/assign",
-        async Task<IResult> (Guid leadId, AssignLeadRequest request, HttpContext httpContext, IStaffTypeClient staffTypeClient, ILeadRepository repository) =>
-        {
-            var errors = new Dictionary<string, string[]>();
-            if (string.IsNullOrWhiteSpace(request.AdviserId))
-            {
-                errors[nameof(request.AdviserId)] = ["AdviserId is required."];
-            }
-
-            if (errors.Count > 0)
-            {
-                return Results.ValidationProblem(errors);
-            }
-
-            var userId = httpContext.User.FindFirstValue(ClaimTypes.NameIdentifier)
-                         ?? httpContext.User.FindFirstValue("sub");
-            if (string.IsNullOrWhiteSpace(userId))
-            {
-                return Results.StatusCode(StatusCodes.Status403Forbidden);
-            }
-
-            var staffType = await staffTypeClient.GetStaffTypeAsync(userId, httpContext.RequestAborted);
-            if (!string.Equals(staffType, "manager", StringComparison.OrdinalIgnoreCase))
-            {
-                return Results.StatusCode(StatusCodes.Status403Forbidden);
-            }
-
-            var updatedLead = repository.Assign(leadId, request.AdviserId);
-            return updatedLead is null ? Results.NotFound() : Results.Ok(updatedLead);
-        })
-    .AllowAnonymous();
+app.MapLeadEndpoints();
 
 app.Run();
 

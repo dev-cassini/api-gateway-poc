@@ -23,5 +23,4 @@ routes:
         - authenticated user
         - role: adviser
       opa:
-        auth:
-          - staff type: manager
+        - staff type: manager

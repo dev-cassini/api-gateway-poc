@@ -2,26 +2,26 @@ routes:
   - name: create-lead
     method: POST
     path: /leads
-    gatewayAuthorization:
-      requirements:
+    plugins:
+      auth:
         - authenticated user
         - scope: leads:import
 
   - name: get-lead
     method: GET
     path: /leads/{leadId}
-    gatewayAuthorization:
-      requirements:
+    plugins:
+      auth:
         - authenticated user
         - role: adviser or customer
 
   - name: assign-lead
     method: POST
     path: /leads/{leadId}/assign
-    gatewayAuthorization:
-      requirements:
+    plugins:
+      auth:
         - authenticated user
         - role: adviser
-    apiChecks:
-      requirements:
-        - staff type: manager (via staff directory lookup)
+      opa:
+        auth:
+          - staff type: manager

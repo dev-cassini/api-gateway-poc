@@ -1,0 +1,47 @@
+name: Auth Remote Integration Tests
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 2 * * *"
+
+jobs:
+  auth-remote-integration-tests:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Run Remote Auth Integration Tests
+        env:
+          AUTH_TEST_ENV: qa
+          AUTH_TEST_BASE_URL: ${{ secrets.AUTH_TEST_BASE_URL }}
+          AUTH_TEST_IDP_TOKEN_ENDPOINT: ${{ secrets.AUTH_TEST_IDP_TOKEN_ENDPOINT }}
+          AUTH_TEST_IDP_IMPERSONATION_ENDPOINT: ${{ secrets.AUTH_TEST_IDP_IMPERSONATION_ENDPOINT }}
+          AUTH_TEST_CLIENT_ID: ${{ secrets.AUTH_TEST_CLIENT_ID }}
+          AUTH_TEST_CLIENT_SECRET: ${{ secrets.AUTH_TEST_CLIENT_SECRET }}
+          AUTH_TEST_AUDIENCE: ${{ secrets.AUTH_TEST_AUDIENCE }}
+          AUTH_TEST_MACHINE_SCOPE: ${{ secrets.AUTH_TEST_MACHINE_SCOPE }}
+          AUTH_TEST_SCOPE_LEADS_IMPORT: ${{ secrets.AUTH_TEST_SCOPE_LEADS_IMPORT }}
+          AUTH_TEST_SCOPE_READ: ${{ secrets.AUTH_TEST_SCOPE_READ }}
+          AUTH_TEST_IMPERSONATION_MODE: ${{ secrets.AUTH_TEST_IMPERSONATION_MODE }}
+          AUTH_TEST_IMPERSONATION_GRANT_TYPE: ${{ secrets.AUTH_TEST_IMPERSONATION_GRANT_TYPE }}
+          AUTH_TEST_REQUESTED_SUBJECT_FIELD: ${{ secrets.AUTH_TEST_REQUESTED_SUBJECT_FIELD }}
+          AUTH_TEST_USER_ADVISER: ${{ secrets.AUTH_TEST_USER_ADVISER }}
+          AUTH_TEST_USER_CUSTOMER: ${{ secrets.AUTH_TEST_USER_CUSTOMER }}
+          AUTH_TEST_USER_MANAGER: ${{ secrets.AUTH_TEST_USER_MANAGER }}
+          AUTH_TEST_USER_NON_PRIVILEGED: ${{ secrets.AUTH_TEST_USER_NON_PRIVILEGED }}
+        run: dotnet test tests/LeadsApi.Auth.IntegrationTests/LeadsApi.Auth.IntegrationTests.csproj -v minimal --logger "trx;LogFileName=auth-remote-integration-tests.trx"
+
+      - name: Upload TRX
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: auth-remote-integration-test-results
+          path: "**/auth-remote-integration-tests.trx"

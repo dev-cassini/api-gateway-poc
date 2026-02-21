@@ -28,6 +28,7 @@ internal sealed class ApiRoutePluginsPolicy
 
 internal sealed class AuthPolicy
 {
+    public bool HasPolicy { get; set; }
     public bool RequiresAuthenticationUser { get; set; }
     public List<string> RequiredScopes { get; } = [];
     public List<string> RequiredRoles { get; } = [];

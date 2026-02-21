@@ -36,7 +36,10 @@ internal static class RoutesYamlPolicyLoader
 
     private static AuthPolicy MapAuth(List<RawAuthRule>? rawRules)
     {
-        var policy = new AuthPolicy();
+        var policy = new AuthPolicy
+        {
+            HasPolicy = rawRules is { Count: > 0 }
+        };
         if (rawRules is null)
         {
             return policy;

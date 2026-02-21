@@ -12,8 +12,8 @@ This is a minimal ASP.NET Core API targeting `net10.0` for the API gateway PoC.
 ## JWT authentication
 
 The API uses ASP.NET Core `JwtBearer` authentication to populate `HttpContext.User`
-from the bearer token forwarded by Kong. Routes are still marked `AllowAnonymous`,
-so the API does not enforce access control policies directly.
+from the bearer token forwarded by Kong. The API does not enforce access control
+policies directly; authorization is expected to be enforced by Kong.
 
 For local testing, the signing key is configured via `Jwt:SigningKey`.
 

@@ -6,8 +6,7 @@ public static class GetLeadEndpoint
 {
     public static void MapGetLeadEndpoint(this RouteGroupBuilder leads)
     {
-        leads.MapGet("/{leadId:guid}", Handle)
-            .AllowAnonymous();
+        leads.MapGet("/{leadId:guid}", Handle);
     }
 
     public static IResult Handle(Guid leadId, ILeadRepository repository)

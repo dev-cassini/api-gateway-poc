@@ -8,8 +8,7 @@ public static class AssignLeadEndpoint
 {
     public static void MapAssignLeadEndpoint(this RouteGroupBuilder leads)
     {
-        leads.MapPost("/{leadId:guid}/assign", Handle)
-            .AllowAnonymous();
+        leads.MapPost("/{leadId:guid}/assign", Handle);
     }
 
     public static async Task<IResult> Handle(

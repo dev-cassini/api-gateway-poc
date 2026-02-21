@@ -8,8 +8,7 @@ public static class CreateLeadEndpoint
 {
     public static void MapCreateLeadEndpoint(this RouteGroupBuilder leads)
     {
-        leads.MapPost("", Handle)
-            .AllowAnonymous();
+        leads.MapPost("", Handle);
     }
 
     public static IResult Handle(CreateLeadRequest request, HttpContext httpContext, ILeadRepository repository)

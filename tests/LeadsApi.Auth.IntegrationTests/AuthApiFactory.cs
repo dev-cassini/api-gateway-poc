@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 
-namespace LeadsApi.AuthTests;
+namespace LeadsApi.Auth.IntegrationTests;
 
 internal sealed class AuthApiFactory : WebApplicationFactory<Program>
 {

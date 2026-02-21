@@ -4,7 +4,7 @@ using System.Net.Http.Json;
 using LeadsApi.Contracts;
 using NUnit.Framework;
 
-namespace LeadsApi.AuthTests;
+namespace LeadsApi.Auth.IntegrationTests;
 
 [TestFixture]
 public sealed class AssignLeadAuthTests

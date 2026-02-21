@@ -2,7 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using NUnit.Framework;
 
-namespace LeadsApi.AuthTests;
+namespace LeadsApi.Auth.IntegrationTests;
 
 [TestFixture]
 public sealed class GetLeadAuthTests

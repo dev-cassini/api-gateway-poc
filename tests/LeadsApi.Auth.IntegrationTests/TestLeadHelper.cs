@@ -5,7 +5,7 @@ using LeadsApi.Contracts;
 using LeadsApi.Models;
 using NUnit.Framework;
 
-namespace LeadsApi.AuthTests;
+namespace LeadsApi.Auth.IntegrationTests;
 
 internal static class TestLeadHelper
 {

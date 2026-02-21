@@ -3,7 +3,7 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
 
-namespace LeadsApi.AuthTests;
+namespace LeadsApi.Auth.IntegrationTests;
 
 internal static class TestJwtTokenFactory
 {

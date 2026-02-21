@@ -4,7 +4,7 @@ using DotNet.Testcontainers.Containers;
 using NUnit.Framework;
 using System.Net;
 
-namespace LeadsApi.AuthTests;
+namespace LeadsApi.Auth.IntegrationTests;
 
 [SetUpFixture]
 public sealed class WebApplicationSetUpFixture
